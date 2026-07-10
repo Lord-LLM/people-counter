@@ -156,3 +156,4 @@ people-counter/
 
 MIT
 # people-counter
+# pc
