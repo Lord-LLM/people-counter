@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: people-counter-backend
+    env: docker
+    plan: free
+    dockerfilePath: backend/Dockerfile
+    rootDir: backend
+    envVars:
+      - key: FRONTEND_ORIGIN
+        value: ""
+      - key: PORT
+        value: ""
+    autoDeploy: true
+    buildCommand: ""
+    startCommand: ""
