@@ -130,8 +130,13 @@ async def get_metrics():
 
 @app.post("/api/start")
 async def start_stream(body: StartRequest):
-    """Begin live capture and tracking on the selected camera index."""
-    tracker.start(camera_index=body.camera_index)
+    """
+    Begin a browser-driven tracking session.
+
+    `camera_index` is still accepted in the request body for frontend UI
+    compatibility, but the server no longer opens a physical camera.
+    """
+    tracker.start()
     return {"message": "stream started", "metrics": metrics.snapshot()}
 
 
