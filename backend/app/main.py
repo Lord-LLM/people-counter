@@ -196,9 +196,26 @@ async def websocket_stream(websocket: WebSocket):
                     loop = asyncio.get_running_loop()
                     jpeg_b64, snap = await loop.run_in_executor(None, tracker.process_frame, frame)
                     await websocket.send_json({"type": "frame", "image": jpeg_b64, "metrics": snap})
+                except WebSocketDisconnect:
+                    logger.info("WebSocketDisconnect during binary processing")
+                    return
+                except RuntimeError as exc:
+                    # Starlette may raise a RuntimeError when receive() is
+                    # called after a disconnect; treat this as a clean exit.
+                    if "Cannot call \"receive\" once a disconnect message has been received" in str(exc):
+                        logger.info("WebSocket closed (receive after disconnect)")
+                        return
+                    logger.exception("Failed to process binary frame: %s", exc)
+                    try:
+                        await websocket.send_json({"type": "error", "message": str(exc)})
+                    except Exception:
+                        return
                 except Exception as exc:
                     logger.exception("Failed to process binary frame: %s", exc)
-                    await websocket.send_json({"type": "error", "message": str(exc)})
+                    try:
+                        await websocket.send_json({"type": "error", "message": str(exc)})
+                    except Exception:
+                        return
 
             # Textual messages: JSON control or base64 images
             elif message.get("type") == "text":
@@ -228,10 +245,23 @@ async def websocket_stream(websocket: WebSocket):
                         await websocket.send_json({"type": "frame", "image": jpeg_b64, "metrics": snap})
 
                 except WebSocketDisconnect:
-                    raise
+                    logger.info("WebSocketDisconnect during text processing")
+                    return
+                except RuntimeError as exc:
+                    if "Cannot call \"receive\" once a disconnect message has been received" in str(exc):
+                        logger.info("WebSocket closed (receive after disconnect)")
+                        return
+                    logger.exception("Error handling text websocket message: %s", exc)
+                    try:
+                        await websocket.send_json({"type": "error", "message": str(exc)})
+                    except Exception:
+                        return
                 except Exception as exc:
                     logger.exception("Error handling text websocket message: %s", exc)
-                    await websocket.send_json({"type": "error", "message": str(exc)})
+                    try:
+                        await websocket.send_json({"type": "error", "message": str(exc)})
+                    except Exception:
+                        return
 
             else:
                 # Unknown message type — ignore silently.
@@ -239,5 +269,13 @@ async def websocket_stream(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")
+        return
+    except RuntimeError as exc:
+        if "Cannot call \"receive\" once a disconnect message has been received" in str(exc):
+            logger.info("WebSocket closed (receive after disconnect)")
+            return
+        logger.warning("WebSocket error: %s", exc)
+        return
     except Exception as exc:
         logger.warning("WebSocket error: %s", exc)
+        return
